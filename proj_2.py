@@ -29,10 +29,20 @@ crime_data['Hour'] = crime_data['Date'].dt.hour
 crime_data['IsWeekend'] = crime_data['DayOfWeek'].isin([5, 6]).astype(int)
 crime_data['Date'] = pd.to_datetime(crime_data[['Year', 'Month', 'Day']])
 
+crime_data['Hour_sin'] = np.sin(2 * np.pi * crime_data['Hour'] / 24) # Cyclic encoding to avoid discontinuity
+crime_data['Hour_cos'] = np.cos(2 * np.pi * crime_data['Hour'] / 24)
 
+crime_data['Month_sin'] = np.sin(2 * np.pi * crime_data['Month'] / 12)
+crime_data['Month_cos'] = np.cos(2 * np.pi * crime_data['Month'] / 12)
+
+crime_data['DayOfWeek_sin'] = np.sin(2 * np.pi * crime_data['DayOfWeek'] / 7)
+crime_data['DayOfWeek_cos'] = np.cos(2 * np.pi * crime_data['DayOfWeek'] / 7)
+
+
+# Day is an ordinal counter when DayOfWeek captures seasonality only
 feature_cols = [
-    'Year', 'Month', 'Day', 'Hour', 'DayOfWeek', 'IsWeekend',
-    'District', 'Ward', 'Community Area',
+    'Year', 'Month_sin', 'Month_cos', 'Day', 'Hour_sin', 'Hour_cos', 'DayOfWeek_sin', 'DayOfWeek_cos', 'IsWeekend', 
+    'District', 'Ward', 'Community Area', 
     'Latitude', 'Longitude',
     'Location Description', 'Domestic', 'Arrest'
 ]
@@ -147,3 +157,83 @@ plt.xticks(rotation=90)
 plt.yticks(rotation=0)
 plt.tight_layout()
 plt.show()
+
+
+
+
+# # I should have made a jupiter notebook haha
+
+
+# # --- Predict 2024 Crimes (Synthetic Inference) ---
+
+# # Step 1: Create synthetic 2024 data (one entry per hour for example)
+# date_range_2024 = pd.date_range(start="2024-01-01", end="2024-12-31 23:00:00", freq="H")
+# df_2024 = pd.DataFrame({'Date': date_range_2024})
+
+# # Step 2: Extract time features
+# df_2024['Year'] = df_2024['Date'].dt.year
+# df_2024['Month'] = df_2024['Date'].dt.month
+# df_2024['Day'] = df_2024['Date'].dt.day
+# df_2024['Hour'] = df_2024['Date'].dt.hour
+# df_2024['DayOfWeek'] = df_2024['Date'].dt.dayofweek
+# df_2024['IsWeekend'] = df_2024['DayOfWeek'].isin([5, 6]).astype(int)
+
+# # Step 3: Add sine/cosine cyclical features
+# df_2024['Hour_sin'] = np.sin(2 * np.pi * df_2024['Hour'] / 24)
+# df_2024['Hour_cos'] = np.cos(2 * np.pi * df_2024['Hour'] / 24)
+# df_2024['Month_sin'] = np.sin(2 * np.pi * df_2024['Month'] / 12)
+# df_2024['Month_cos'] = np.cos(2 * np.pi * df_2024['Month'] / 12)
+# df_2024['DayOfWeek_sin'] = np.sin(2 * np.pi * df_2024['DayOfWeek'] / 7)
+# df_2024['DayOfWeek_cos'] = np.cos(2 * np.pi * df_2024['DayOfWeek'] / 7)
+
+# # Step 4: Compute default values from dataset
+# default_values = {
+#     'District': data['District'].mode()[0],            # Most common district
+#     'Ward': data['Ward'].mode()[0],                    # Most common ward
+#     'Community Area': data['Community Area'].mode()[0],
+#     'Latitude': data['Latitude'].mean(),               # Average location
+#     'Longitude': data['Longitude'].mean(),
+#     'Location Description': data['Location Description'].mode()[0],
+#     'Domestic': 0,
+#     'Arrest': 0,
+# }
+# for col, value in default_values.items():
+#     df_2024[col] = value
+
+
+# # Step 5: Match column types
+# df_2024['District'] = df_2024['District'].astype('category')
+# df_2024['Ward'] = df_2024['Ward'].astype('category')
+# df_2024['Community Area'] = df_2024['Community Area'].astype('category')
+# df_2024['Location Description'] = df_2024['Location Description'].astype('category')
+
+# # Step 6: Select feature columns (same order as training!)
+# X_2024 = df_2024[
+#     [
+#     'Year', 'Month_sin', 'Month_cos', 'Day', 'Hour_sin', 
+#     'Hour_cos', 'DayOfWeek_sin', 'DayOfWeek_cos', 'IsWeekend',
+#     'District', 'Ward', 'Community Area','Latitude', 'Longitude',
+#     'Location Description', 'Domestic', 'Arrest'
+#     ]
+# ]
+
+# # Step 7: Predict with your trained model
+# y_2024_preds = model.predict(X_2024)
+# predicted_categories = le_grouped.inverse_transform(y_2024_preds)
+# df_2024['Predicted Crime Category'] = predicted_categories
+
+# # Step 8: Plot results on a form of daily heatmap 
+
+# daily_counts = df_2024.groupby([df_2024['Date'].dt.date, 'Predicted Crime Category']).size().unstack().fillna(0)
+
+# plt.figure(figsize=(18, 10))
+# sns.heatmap(daily_counts.T, cmap='YlGnBu', cbar_kws={'label': 'Predicted Crime Count'})
+# plt.title('Predicted Daily Crime Categories in 2024')
+# plt.xlabel('Date')
+# plt.ylabel('Crime Category')
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+
+# # Next step : Use random samples from the original distribution instead of static values.
+# # And maybe generate separate 2024 prediction batches for different locations or scenario testing.
